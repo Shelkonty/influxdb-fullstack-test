@@ -6,17 +6,22 @@ using InfluxTelemetryApi.DTO;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Загрузка .env файла
 DotNetEnv.Env.Load();
 
-// Конфигурация InfluxDB
+// fallback InfluxDB
 var influxUrl = Environment.GetEnvironmentVariable("INFLUX_URL") ?? "http://185.234.114.212:8086/";
 var influxToken = Environment.GetEnvironmentVariable("INFLUX_TOKEN") ?? throw new Exception("INFLUX_TOKEN not set");
 var influxOrg = Environment.GetEnvironmentVariable("INFLUX_ORG") ?? "Kontrol Techniki";
 var influxBucket = Environment.GetEnvironmentVariable("INFLUX_BUCKET") ?? "t";
 var influxMeasurement = Environment.GetEnvironmentVariable("INFLUX_MEASUREMENT") ?? "telemetry";
 
-builder.Services.AddSingleton(new InfluxDBClient(influxUrl, influxToken));
+// Конфигурация с увеличенным таймаутом
+var influxOptions = new InfluxDBClientOptions(influxUrl)
+{
+    Token = influxToken,
+    Timeout = TimeSpan.FromSeconds(120)
+};
+builder.Services.AddSingleton(new InfluxDBClient(influxOptions));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
@@ -37,7 +42,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 
-// GET /api/imeis - Получить список доступных IMEI
+// GET /api/imeis - список  IMEI
 app.MapGet("/api/imeis", async (InfluxDBClient client, ILogger<Program> logger) =>
 {
     logger.LogInformation("Fetching IMEIs from InfluxDB");
@@ -66,7 +71,6 @@ app.MapGet("/api/imeis", async (InfluxDBClient client, ILogger<Program> logger) 
             logger.LogInformation("Table has {Count} records", table.Records.Count);
             foreach (var record in table.Records)
             {
-                // Данные в колонке imei
                 string? imei = null;
                 
                 if (record.Values.ContainsKey("imei"))
@@ -94,7 +98,7 @@ app.MapGet("/api/imeis", async (InfluxDBClient client, ILogger<Program> logger) 
 .WithName("GetImeis")
 .WithOpenApi();
 
-// GET /api/fields?imei=... - Получить список полей для IMEI
+// GET /api/fields?imei=... - список полей для IMEI
 app.MapGet("/api/fields", async (InfluxDBClient client, [FromQuery] string imei, ILogger<Program> logger) =>
 {
     if (string.IsNullOrEmpty(imei))
@@ -112,6 +116,7 @@ app.MapGet("/api/fields", async (InfluxDBClient client, [FromQuery] string imei,
           |> group(columns: [""_field""])
           |> distinct(column: ""_field"")
           |> group()
+          |> sort()
     ";
 
     logger.LogInformation("Executing query: {Query}", query);
@@ -158,123 +163,304 @@ app.MapGet("/api/fields", async (InfluxDBClient client, [FromQuery] string imei,
 .WithName("GetFields")
 .WithOpenApi();
 
-// GET /api/telemetry?imei=...&start=...&end=... - Получить данные телеметрии
 app.MapGet("/api/telemetry", async (
     InfluxDBClient client, 
     [FromQuery] string imei,
-    [FromQuery] string start,
-    [FromQuery] string end) =>
+    [FromQuery] long startTimestamp,
+    [FromQuery] long endTimestamp,
+    ILogger<Program> logger) =>
 {
-    if (string.IsNullOrEmpty(imei) || string.IsNullOrEmpty(start) || string.IsNullOrEmpty(end))
+    if (string.IsNullOrEmpty(imei) || startTimestamp <= 0 || endTimestamp <= 0)
     {
-        return Results.BadRequest(new { error = "Parameters imei, start, and end are required" });
+        return Results.BadRequest(new { error = "Parameters imei, startTimestamp, and endTimestamp are required" });
     }
 
-    var query = $@"
-        imei = ""{imei}""
-        start = time(v: ""{start}"")
-        stop = time(v: ""{end}"")
+    if (startTimestamp >= endTimestamp)
+    {
+        return Results.BadRequest(new { error = "startTimestamp must be less than endTimestamp" });
+    }
 
+    var startDateTime = DateTimeOffset.FromUnixTimeSeconds(startTimestamp).UtcDateTime;
+    var endDateTime = DateTimeOffset.FromUnixTimeSeconds(endTimestamp).UtcDateTime;
+    
+    var startRFC3339 = startDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
+    var endRFC3339 = endDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+    // Вычисляем диапазон в днях
+    var rangeDays = (endTimestamp - startTimestamp) / (60.0 * 60.0 * 24.0);
+    
+    // Определяем интервал агрегации
+    string aggregationWindow;
+    if (rangeDays <= 1)
+    {
+        aggregationWindow = "1m";  // До 1 дня - каждую минуту
+    }
+    else if (rangeDays <= 7)
+    {
+        aggregationWindow = "5m";  // До недели - каждые 5 минут
+    }
+    else if (rangeDays <= 30)
+    {
+        aggregationWindow = "15m"; // До месяца - каждые 15 минут
+    }
+    else if (rangeDays <= 90)
+    {
+        aggregationWindow = "1h";  // До 3 месяцев - каждый час
+    }
+    else
+    {
+        aggregationWindow = "4h";  // Больше 3 месяцев - каждые 4 часа
+    }
+
+    logger.LogInformation(
+        "Fetching telemetry for IMEI: {Imei}, Start: {Start}, End: {End}, Range: {Range} days, Aggregation: {Agg}", 
+        imei, startRFC3339, endRFC3339, Math.Round(rangeDays, 2), aggregationWindow
+    );
+    
+    var query = $@"
+        import ""strings""
+        
         from(bucket: ""{influxBucket}"")
-          |> range(start: start, stop: stop)
-          |> filter(fn: (r) => r[""_measurement""] == ""{influxMeasurement}"" and r[""imei""] == imei)
+          |> range(start: {startRFC3339}, stop: {endRFC3339})
+          |> filter(fn: (r) => r[""_measurement""] == ""{influxMeasurement}"")
+          |> filter(fn: (r) => r[""imei""] == ""{imei}"")
           |> filter(fn: (r) => 
               r[""_field""] == ""speed"" or 
-              r[""_field""] == ""fls485_level_2"" or 
+              r[""_field""] == ""main_power_voltage"" or 
               r[""_field""] == ""latitude"" or 
               r[""_field""] == ""longitude"" or 
-              r[""_field""] == ""main_power_voltage"" or 
-              r[""_field""] == ""event_time"")
+              r[""_field""] == ""event_time"" or
+              strings.hasPrefix(v: r[""_field""], prefix: ""fls485_level_"")
+          )
+          |> aggregateWindow(every: {aggregationWindow}, fn: mean, createEmpty: false)
           |> pivot(rowKey: [""_time""], columnKey: [""_field""], valueColumn: ""_value"")
           |> sort(columns: [""_time""])
     ";
 
-    var queryApi = client.GetQueryApi();
-    var tables = await queryApi.QueryAsync(query, influxOrg);
-    
-    var speedData = new List<DTO.DataPoint>();
-    var fls485Data = new List<DTO.DataPoint>();
-    var voltageData = new List<DTO.DataPoint>();
-    var trackData = new List<DTO.TrackPoint>();
+    logger.LogInformation("Executing optimized query with aggregation: {Aggregation}", aggregationWindow);
 
-    foreach (var table in tables)
+    try
     {
-        foreach (var record in table.Records)
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        
+        var queryApi = client.GetQueryApi();
+        var tables = await queryApi.QueryAsync(query, influxOrg);
+        
+        stopwatch.Stop();
+        logger.LogInformation(
+            "Query completed in {ElapsedMs}ms. Received {Count} tables from InfluxDB", 
+            stopwatch.ElapsedMilliseconds, 
+            tables.Count
+        );
+        
+        var speedData = new List<DTO.DataPoint>();
+        var voltageData = new List<DTO.DataPoint>();
+        var trackData = new List<DTO.TrackPoint>();
+        
+        var fuelSensorsRaw = new Dictionary<string, List<DTO.DataPoint>>();
+        var fuelSumData = new List<DTO.DataPoint>();
+
+        foreach (var table in tables)
         {
-            var time = record.GetTime()?.ToDateTimeUtc().ToString("yyyy-MM-ddTHH:mm:ssZ");
-            
-            // Speed
-            if (record.Values.ContainsKey("speed"))
+            foreach (var record in table.Records)
             {
-                var speedValue = Convert.ToInt32(record.Values["speed"]);
-                speedData.Add(new DTO.DataPoint { Time = time, Value = speedValue });
-            }
+                var influxTime = record.GetTime();
+                if (!influxTime.HasValue) continue;
 
-            // FLS485 Level 2
-            if (record.Values.ContainsKey("fls485_level_2"))
-            {
-                var flsValue = Convert.ToInt32(record.Values["fls485_level_2"]);
-                fls485Data.Add(new DTO.DataPoint { Time = time, Value = flsValue });
-            }
-
-            // Main Power Voltage
-            if (record.Values.ContainsKey("main_power_voltage"))
-            {
-                var voltageRaw = Convert.ToDouble(record.Values["main_power_voltage"]);
-                var voltageInVolts = Math.Round(voltageRaw / 1000.0, 2);
-                voltageData.Add(new DTO.DataPoint { Time = time, Value = voltageInVolts });
-            }
-
-            // Track
-            if (record.Values.ContainsKey("latitude") && record.Values.ContainsKey("longitude"))
-            {
-                var lat = Convert.ToDouble(record.Values["latitude"]);
-                var lon = Convert.ToDouble(record.Values["longitude"]);
+                var timestamp = influxTime.Value.ToDateTimeUtc();
+                var unixTimestamp = new DateTimeOffset(timestamp).ToUnixTimeSeconds();
                 
-                long eventTime;
-                if (record.Values.ContainsKey("event_time"))
+                // Speed
+                if (record.Values.ContainsKey("speed"))
                 {
-                    var eventTimeValue = record.Values["event_time"];
-                    if (eventTimeValue is string str)
+                    var speedValue = Convert.ToDouble(record.Values["speed"]);
+                    speedData.Add(new DTO.DataPoint 
+                    { 
+                        Time = unixTimestamp.ToString(), 
+                        Value = Math.Round(speedValue, 2)
+                    });
+                }
+
+                // Voltage
+                if (record.Values.ContainsKey("main_power_voltage"))
+                {
+                    var voltageRaw = Convert.ToDouble(record.Values["main_power_voltage"]);
+                    var voltageInVolts = Math.Round(voltageRaw / 1000.0, 2);
+                    voltageData.Add(new DTO.DataPoint 
+                    { 
+                        Time = unixTimestamp.ToString(), 
+                        Value = voltageInVolts 
+                    });
+                }
+
+                // Датчики топлива
+                double totalFuel = 0;
+                bool hasFuelData = false;
+                
+                foreach (var key in record.Values.Keys)
+                {
+                    if (key.StartsWith("fls485_level_"))
                     {
-                        eventTime = long.Parse(str);
+                        if (!fuelSensorsRaw.ContainsKey(key))
+                        {
+                            fuelSensorsRaw[key] = new List<DTO.DataPoint>();
+                        }
+                        
+                        var fuelValue = Convert.ToDouble(record.Values[key]);
+                        fuelSensorsRaw[key].Add(new DTO.DataPoint
+                        {
+                            Time = unixTimestamp.ToString(),
+                            Value = Math.Round(fuelValue, 2)
+                        });
+                        
+                        totalFuel += fuelValue;
+                        hasFuelData = true;
+                    }
+                }
+                
+                // Сумма топлива
+                if (hasFuelData)
+                {
+                    fuelSumData.Add(new DTO.DataPoint
+                    {
+                        Time = unixTimestamp.ToString(),
+                        Value = Math.Round(totalFuel, 2)
+                    });
+                }
+
+                // Track
+                if (record.Values.ContainsKey("latitude") && record.Values.ContainsKey("longitude"))
+                {
+                    var lat = Convert.ToDouble(record.Values["latitude"]);
+                    var lon = Convert.ToDouble(record.Values["longitude"]);
+                    
+                    long eventTime;
+                    if (record.Values.ContainsKey("event_time"))
+                    {
+                        var eventTimeValue = record.Values["event_time"];
+                        eventTime = eventTimeValue is string str ? long.Parse(str) : Convert.ToInt64(eventTimeValue);
                     }
                     else
                     {
-                        eventTime = Convert.ToInt64(eventTimeValue);
+                        eventTime = unixTimestamp;
                     }
-                }
-                else
-                {
-                    eventTime = record.GetTime()?.ToDateTimeUtc().Ticks ?? 0;
-                    eventTime = (eventTime - 621355968000000000) / 10000000;
-                }
 
-                trackData.Add(new DTO.TrackPoint 
-                { 
-                    Time = time, 
-                    Lat = lat, 
-                    Lon = lon,
-                    EventTime = eventTime
-                });
+                    trackData.Add(new DTO.TrackPoint 
+                    { 
+                        Time = unixTimestamp.ToString(), 
+                        Lat = lat, 
+                        Lon = lon,
+                        EventTime = eventTime
+                    });
+                }
             }
         }
-    }
 
-    var response = new
-    {
-        series = new
+        logger.LogInformation(
+            "Query completed: Speed={Speed}, Voltage={Voltage}, Track={Track}, FuelSensors={Fuel}, TotalFuel={Total}",
+            speedData.Count, voltageData.Count, trackData.Count, fuelSensorsRaw.Count, fuelSumData.Count
+        );
+
+        var response = new
         {
-            speed = speedData,
-            fls485_level_2 = fls485Data,
-            main_power_voltage = voltageData
-        },
-        track = trackData
-    };
+            series = new Dictionary<string, object>
+            {
+                { "speed", speedData },
+                { "main_power_voltage", voltageData },
+                { "fuel_total", fuelSumData }
+            },
+            fuelSensors = fuelSensorsRaw,
+            track = trackData,
+            metadata = new
+            {
+                startTimestamp = startTimestamp,
+                endTimestamp = endTimestamp,
+                totalRecords = trackData.Count,
+                availableFuelSensors = fuelSensorsRaw.Keys.OrderBy(k => k).ToList(),
+                aggregationWindow = aggregationWindow,
+                rangeDays = Math.Round(rangeDays, 2)
+            }
+        };
 
-    return Results.Ok(response);
+        return Results.Ok(response);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error fetching telemetry for IMEI: {Imei}", imei);
+        return Results.Problem($"Error: {ex.Message}\nStack: {ex.StackTrace}");
+    }
 })
 .WithName("GetTelemetry")
+.WithOpenApi();
+
+// GET /api/debug/time?imei=...&date=... - Диагностика времени
+app.MapGet("/api/debug/time", async (
+    InfluxDBClient client,
+    [FromQuery] string imei,
+    [FromQuery] string date, // Формат: 2024-11-20
+    ILogger<Program> logger) =>
+{
+    if (string.IsNullOrEmpty(imei) || string.IsNullOrEmpty(date))
+    {
+        return Results.BadRequest(new { error = "Parameters imei and date are required" });
+    }
+
+    logger.LogInformation("Debug time query for IMEI: {Imei}, Date: {Date}", imei, date);
+
+    // Запрос на весь день
+    var query = $@"
+        from(bucket: ""{influxBucket}"")
+          |> range(start: {date}T00:00:00Z, stop: {date}T23:59:59Z)
+          |> filter(fn: (r) => r[""_measurement""] == ""{influxMeasurement}"")
+          |> filter(fn: (r) => r[""imei""] == ""{imei}"")
+          |> limit(n: 10)
+    ";
+
+    logger.LogInformation("Executing debug query: {Query}", query);
+
+    try
+    {
+        var queryApi = client.GetQueryApi();
+        var tables = await queryApi.QueryAsync(query, influxOrg);
+
+        var results = new List<object>();
+        foreach (var table in tables)
+        {
+            foreach (var record in table.Records)
+            {
+                var time = record.GetTime();
+                if (time.HasValue)
+                {
+                    var utc = time.Value.ToDateTimeUtc();
+                    var unix = new DateTimeOffset(utc).ToUnixTimeSeconds();
+                    
+                    results.Add(new
+                    {
+                        influx_time = time.Value.ToString(),
+                        utc_datetime = utc.ToString("yyyy-MM-dd HH:mm:ss"),
+                        unix_timestamp = unix,
+                        field = record.GetField(),
+                        value = record.GetValue()
+                    });
+                }
+            }
+        }
+
+        return Results.Ok(new
+        {
+            imei,
+            date,
+            total_records = results.Count,
+            sample_records = results
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error in debug query");
+        return Results.Problem($"Error: {ex.Message}");
+    }
+})
+.WithName("DebugTime")
 .WithOpenApi();
 
 app.Run();

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj": {}
+    "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj": {}
   },
   "projects": {
-    "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj": {
+    "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
+        "projectUniqueName": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
         "projectName": "InfluxTelemetryApi",
-        "projectPath": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
+        "projectPath": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
         "packagesPath": "C:\\Users\\hdfgh\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\obj\\",
+        "outputPath": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

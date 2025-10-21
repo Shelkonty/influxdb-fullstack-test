@@ -1,18 +1,18 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\",
+  "WorkspaceRootPath": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{620857CF-9AC0-4F4D-8EA7-0EB7F02EDFBA}|InfluxTelemetryApi\\InfluxTelemetryApi.csproj|c:\\users\\hdfgh\\riderprojects\\influxtelemetryapi\\influxtelemetryapi\\.env||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{620857CF-9AC0-4F4D-8EA7-0EB7F02EDFBA}|InfluxTelemetryApi\\InfluxTelemetryApi.csproj|solutionrelative:influxtelemetryapi\\.env||{8B382828-6202-11D1-8870-0000F87579D2}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\.env||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:InfluxTelemetryApi\\.env||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{620857CF-9AC0-4F4D-8EA7-0EB7F02EDFBA}|InfluxTelemetryApi\\InfluxTelemetryApi.csproj|c:\\users\\hdfgh\\riderprojects\\influxtelemetryapi\\influxtelemetryapi\\influxtelemetryapi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
-      "RelativeMoniker": "D:0:0:{620857CF-9AC0-4F4D-8EA7-0EB7F02EDFBA}|InfluxTelemetryApi\\InfluxTelemetryApi.csproj|solutionrelative:influxtelemetryapi\\influxtelemetryapi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\Program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:InfluxTelemetryApi\\Program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{620857CF-9AC0-4F4D-8EA7-0EB7F02EDFBA}|InfluxTelemetryApi\\InfluxTelemetryApi.csproj|c:\\users\\hdfgh\\riderprojects\\influxtelemetryapi\\influxtelemetryapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{620857CF-9AC0-4F4D-8EA7-0EB7F02EDFBA}|InfluxTelemetryApi\\InfluxTelemetryApi.csproj|solutionrelative:influxtelemetryapi\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:InfluxTelemetryApi\\InfluxTelemetryApi.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
     }
   ],
   "DocumentGroupContainers": [
@@ -28,9 +28,9 @@
               "$type": "Document",
               "DocumentIndex": 0,
               "Title": ".env",
-              "DocumentMoniker": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\.env",
+              "DocumentMoniker": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\.env",
               "RelativeDocumentMoniker": "InfluxTelemetryApi\\.env",
-              "ToolTip": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\.env",
+              "ToolTip": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\.env",
               "RelativeToolTip": "InfluxTelemetryApi\\.env",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAOAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
@@ -39,29 +39,27 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
               "Title": "Program.cs",
-              "DocumentMoniker": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\Program.cs",
+              "DocumentMoniker": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\Program.cs",
               "RelativeDocumentMoniker": "InfluxTelemetryApi\\Program.cs",
-              "ToolTip": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\Program.cs",
+              "ToolTip": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\Program.cs",
               "RelativeToolTip": "InfluxTelemetryApi\\Program.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-10-17T21:14:48.329Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-17T21:14:48.329Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "InfluxTelemetryApi",
-              "DocumentMoniker": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
+              "DocumentIndex": 2,
+              "Title": "InfluxTelemetryApi.csproj",
+              "DocumentMoniker": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
               "RelativeDocumentMoniker": "InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
-              "ToolTip": "C:\\Users\\hdfgh\\RiderProjects\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
+              "ToolTip": "C:\\Users\\hdfgh\\WebstormProjects\\influxdb-fullstack-test\\submissions\\backend\\InfluxTelemetryApi\\InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
               "RelativeToolTip": "InfluxTelemetryApi\\InfluxTelemetryApi.csproj",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAARAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
-              "WhenOpened": "2025-10-17T21:13:07.338Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-10-17T21:13:07.338Z"
             }
           ]
         }

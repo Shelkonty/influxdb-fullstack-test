@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
-import { Calendar, Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { Calendar, Download, RefreshCw, AlertCircle, Fuel, Zap } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -13,35 +13,74 @@ L.Icon.Default.mergeOptions({
 });
 
 const API_BASE = 'http://localhost:5294';
+const ALMATY_OFFSET_HOURS = 5;
 
 const MapBounds = ({ bounds }) => {
     const map = useMap();
-
     useEffect(() => {
         if (bounds && bounds.length === 2) {
             map.fitBounds(bounds, { padding: [50, 50] });
         }
     }, [bounds, map]);
-
     return null;
 };
 
-const ALMATY_OFFSET = 5 * 60;
-
-const formatDateForAPI = (date) => {
-    return date.toISOString();
+const almatyToUnixTimestamp = (dateStr) => {
+    const localDate = new Date(dateStr);
+    const utcTimestamp = Date.UTC(
+        localDate.getFullYear(),
+        localDate.getMonth(),
+        localDate.getDate(),
+        localDate.getHours(),
+        localDate.getMinutes(),
+        localDate.getSeconds()
+    );
+    const utcTimestampAdjusted = utcTimestamp - (ALMATY_OFFSET_HOURS * 60 * 60 * 1000);
+    return Math.floor(utcTimestampAdjusted / 1000);
 };
 
-const formatDateForInput = (date) => {
-    const offset = date.getTimezoneOffset();
-    const localDate = new Date(date.getTime() - (offset * 60 * 1000) + (ALMATY_OFFSET * 60 * 1000));
-    return localDate.toISOString().slice(0, 16);
+const unixTimestampToAlmaty = (timestamp) => {
+    const utcDate = new Date(timestamp * 1000);
+    const almatyDate = new Date(utcDate.getTime() + (ALMATY_OFFSET_HOURS * 60 * 60 * 1000));
+
+    const year = almatyDate.getUTCFullYear();
+    const month = String(almatyDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(almatyDate.getUTCDate()).padStart(2, '0');
+    const hours = String(almatyDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(almatyDate.getUTCMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-const parseInputDate = (dateStr) => {
-    const date = new Date(dateStr);
-    const offset = date.getTimezoneOffset();
-    return new Date(date.getTime() + (offset * 60 * 1000) - (ALMATY_OFFSET * 60 * 1000));
+const formatTimestampForDisplay = (timestamp) => {
+    const utcDate = new Date(parseInt(timestamp) * 1000);
+    const almatyDate = new Date(utcDate.getTime() + (ALMATY_OFFSET_HOURS * 60 * 60 * 1000));
+
+    const day = String(almatyDate.getUTCDate()).padStart(2, '0');
+    const month = String(almatyDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = almatyDate.getUTCFullYear();
+    const hours = String(almatyDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(almatyDate.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(almatyDate.getUTCSeconds()).padStart(2, '0');
+
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
+};
+
+// Кастомный Tooltip с полной информацией
+const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white border-2 border-gray-300 rounded-lg shadow-lg p-3">
+                <p className="font-semibold text-gray-800 mb-2">{label}</p>
+                {payload.map((entry, index) => (
+                    <p key={index} style={{ color: entry.color }} className="text-sm font-medium">
+                        {entry.name}: <span className="font-bold">{entry.value}</span>
+                    </p>
+                ))}
+            </div>
+        );
+    }
+    return null;
 };
 
 const TelemetryDashboard = () => {
@@ -52,14 +91,14 @@ const TelemetryDashboard = () => {
     const [telemetryData, setTelemetryData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [showIndividualSensors, setShowIndividualSensors] = useState(false);
 
     useEffect(() => {
         fetchImeis();
-
-        const now = new Date();
-        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        setEndDate(formatDateForInput(now));
-        setStartDate(formatDateForInput(yesterday));
+        const nowTimestamp = Math.floor(Date.now() / 1000);
+        const yesterdayTimestamp = nowTimestamp - (24 * 60 * 60);
+        setEndDate(unixTimestampToAlmaty(nowTimestamp));
+        setStartDate(unixTimestampToAlmaty(yesterdayTimestamp));
     }, []);
 
     const fetchImeis = async () => {
@@ -85,20 +124,32 @@ const TelemetryDashboard = () => {
         setError(null);
 
         try {
-            const start = parseInputDate(startDate);
-            const end = parseInputDate(endDate);
+            const startTimestamp = almatyToUnixTimestamp(startDate);
+            const endTimestamp = almatyToUnixTimestamp(endDate);
 
-            const response = await fetch(
-                `${API_BASE}/api/telemetry?imei=${selectedImei}&start=${formatDateForAPI(start)}&end=${formatDateForAPI(end)}`
-            );
+            console.log('Запрос данных:', {
+                imei: selectedImei,
+                startDate,
+                endDate,
+                startTimestamp,
+                endTimestamp,
+                startUTC: new Date(startTimestamp * 1000).toISOString(),
+                endUTC: new Date(endTimestamp * 1000).toISOString()
+            });
+
+            const url = `${API_BASE}/api/telemetry?imei=${selectedImei}&startTimestamp=${startTimestamp}&endTimestamp=${endTimestamp}`;
+            const response = await fetch(url);
 
             if (!response.ok) {
-                throw new Error('Ошибка получения данных');
+                const errorText = await response.text();
+                throw new Error(`Ошибка ${response.status}: ${errorText}`);
             }
 
             const data = await response.json();
+            console.log('Получены данные:', data);
             setTelemetryData(data);
         } catch (err) {
+            console.error('Ошибка запроса:', err);
             setError('Ошибка загрузки телеметрии: ' + err.message);
         } finally {
             setLoading(false);
@@ -107,14 +158,15 @@ const TelemetryDashboard = () => {
 
     const formatChartData = (seriesData) => {
         return seriesData.map(point => ({
-            time: new Date(point.time).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' }),
-            value: point.value
+            time: formatTimestampForDisplay(point.time),
+            value: point.value,
+            timestamp: point.time
         }));
     };
 
     const getMapCenter = () => {
         if (!telemetryData?.track || telemetryData.track.length === 0) {
-            return [51.1694, 71.4491];
+            return [43.2220, 76.8512];
         }
         const firstPoint = telemetryData.track[0];
         return [firstPoint.lat, firstPoint.lon];
@@ -122,10 +174,8 @@ const TelemetryDashboard = () => {
 
     const getMapBounds = () => {
         if (!telemetryData?.track || telemetryData.track.length === 0) return null;
-
         const lats = telemetryData.track.map(p => p.lat);
         const lons = telemetryData.track.map(p => p.lon);
-
         return [
             [Math.min(...lats), Math.min(...lons)],
             [Math.max(...lats), Math.max(...lons)]
@@ -137,7 +187,7 @@ const TelemetryDashboard = () => {
             <div className="max-w-7xl mx-auto">
                 <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
                     <h1 className="text-3xl font-bold text-gray-800 mb-6">
-                        Мониторинг Телеметрии InfluxDB
+                        🚗 Мониторинг Телеметрии InfluxDB
                     </h1>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
@@ -158,7 +208,7 @@ const TelemetryDashboard = () => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Начало (Алматы)
+                                Начало (Алматы UTC+5)
                             </label>
                             <input
                                 type="datetime-local"
@@ -170,7 +220,7 @@ const TelemetryDashboard = () => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Конец (Алматы)
+                                Конец (Алматы UTC+5)
                             </label>
                             <input
                                 type="datetime-local"
@@ -184,7 +234,7 @@ const TelemetryDashboard = () => {
                             <button
                                 onClick={fetchTelemetry}
                                 disabled={loading}
-                                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center gap-2"
+                                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 flex items-center justify-center gap-2 transition-colors"
                             >
                                 {loading ? (
                                     <>
@@ -211,74 +261,233 @@ const TelemetryDashboard = () => {
 
                 {telemetryData && (
                     <div>
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-blue-600 p-3 rounded-lg">
+                                        <Calendar className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-600 font-medium">Период</p>
+                                        <p className="text-sm font-bold text-gray-800">
+                                            {telemetryData.metadata?.rangeDays} дней
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-green-600 p-3 rounded-lg">
+                                        <Zap className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-600 font-medium">Записей</p>
+                                        <p className="text-sm font-bold text-gray-800">
+                                            {telemetryData.metadata?.totalRecords?.toLocaleString()} шт
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-purple-600 p-3 rounded-lg">
+                                        <Fuel className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-600 font-medium">Датчики топлива</p>
+                                        <p className="text-sm font-bold text-gray-800">
+                                            {telemetryData.metadata?.availableFuelSensors?.length || 0} шт
+                                            {telemetryData.metadata?.availableFuelSensors?.length > 0 &&
+                                                ` (${telemetryData.metadata.availableFuelSensors.map(s => s.replace('fls485_level_', '#')).join(', ')})`
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-3 pt-3 border-t border-blue-200">
+                                <p className="text-xs text-gray-600">
+                                    ⚙️ Агрегация: <span className="font-semibold text-gray-800">{telemetryData.metadata?.aggregationWindow}</span>
+                                    {' | '}
+                                    📅 С: <span className="font-semibold text-gray-800">{formatTimestampForDisplay(telemetryData.metadata?.startTimestamp)}</span>
+                                    {' | '}
+                                    📅 По: <span className="font-semibold text-gray-800">{formatTimestampForDisplay(telemetryData.metadata?.endTimestamp)}</span>
+                                </p>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 gap-6 mb-6">
+                            {/* График скорости */}
                             <div className="bg-white rounded-lg shadow-lg p-6">
-                                <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                                    Скорость (км/ч)
+                                <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    🏎️ Скорость (км/ч)
                                 </h2>
                                 {telemetryData.series.speed.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height={300}>
+                                    <ResponsiveContainer width="100%" height={350}>
                                         <LineChart data={formatChartData(telemetryData.series.speed)}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                                            <YAxis label={{ value: 'км/ч', angle: -90, position: 'insideLeft' }} />
-                                            <Tooltip />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="value" stroke="#3b82f6" name="Скорость" dot={false} />
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                            <XAxis
+                                                dataKey="time"
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={100}
+                                                fontSize={11}
+                                                stroke="#6b7280"
+                                            />
+                                            <YAxis
+                                                label={{ value: 'км/ч', angle: -90, position: 'insideLeft' }}
+                                                stroke="#6b7280"
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="value"
+                                                stroke="#3b82f6"
+                                                name="Скорость"
+                                                dot={false}
+                                                strokeWidth={2}
+                                            />
                                         </LineChart>
                                     </ResponsiveContainer>
                                 ) : (
-                                    <p className="text-gray-500 text-center py-8">Нет данных</p>
+                                    <p className="text-gray-500 text-center py-8">Нет данных о скорости</p>
                                 )}
                             </div>
 
+                            {/* График топлива */}
                             <div className="bg-white rounded-lg shadow-lg p-6">
-                                <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                                    Уровень топлива FLS485 (л)
-                                </h2>
-                                {telemetryData.series.fls485_level_2.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height={300}>
-                                        <LineChart data={formatChartData(telemetryData.series.fls485_level_2)}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                                            <YAxis label={{ value: 'литры', angle: -90, position: 'insideLeft' }} />
-                                            <Tooltip />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="value" stroke="#10b981" name="Топливо" dot={false} />
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                                        ⛽ Уровень топлива (л)
+                                    </h2>
+                                    {telemetryData.metadata?.availableFuelSensors?.length > 1 && (
+                                        <button
+                                            onClick={() => setShowIndividualSensors(!showIndividualSensors)}
+                                            className="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors"
+                                        >
+                                            {showIndividualSensors ? 'Показать сумму' : 'Показать раздельно'}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {!showIndividualSensors && telemetryData.series.fuel_total?.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height={350}>
+                                        <LineChart data={formatChartData(telemetryData.series.fuel_total)}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                            <XAxis
+                                                dataKey="time"
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={100}
+                                                fontSize={11}
+                                                stroke="#6b7280"
+                                            />
+                                            <YAxis
+                                                label={{ value: 'литры', angle: -90, position: 'insideLeft' }}
+                                                stroke="#6b7280"
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="value"
+                                                stroke="#10b981"
+                                                name="Общий объем топлива"
+                                                dot={false}
+                                                strokeWidth={2}
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                ) : showIndividualSensors && telemetryData.fuelSensors && Object.keys(telemetryData.fuelSensors).length > 0 ? (
+                                    <ResponsiveContainer width="100%" height={350}>
+                                        <LineChart>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                            <XAxis
+                                                dataKey="time"
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={100}
+                                                fontSize={11}
+                                                stroke="#6b7280"
+                                                allowDuplicatedCategory={false}
+                                            />
+                                            <YAxis
+                                                label={{ value: 'литры', angle: -90, position: 'insideLeft' }}
+                                                stroke="#6b7280"
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            {Object.entries(telemetryData.fuelSensors).map(([sensorName, sensorData], index) => {
+                                                const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
+                                                const color = colors[index % colors.length];
+                                                const sensorNumber = sensorName.replace('fls485_level_', '');
+                                                const formattedData = formatChartData(sensorData);
+
+                                                return (
+                                                    <Line
+                                                        key={sensorName}
+                                                        data={formattedData}
+                                                        type="monotone"
+                                                        dataKey="value"
+                                                        stroke={color}
+                                                        name={`Датчик #${sensorNumber}`}
+                                                        dot={false}
+                                                        strokeWidth={2}
+                                                    />
+                                                );
+                                            })}
                                         </LineChart>
                                     </ResponsiveContainer>
                                 ) : (
-                                    <p className="text-gray-500 text-center py-8">Нет данных</p>
+                                    <p className="text-gray-500 text-center py-8">Нет данных о топливе</p>
                                 )}
                             </div>
 
+                            {/* График напряжения */}
                             <div className="bg-white rounded-lg shadow-lg p-6">
-                                <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                                    Напряжение питания (В)
+                                <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    🔋 Напряжение питания (В)
                                 </h2>
                                 {telemetryData.series.main_power_voltage.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height={300}>
+                                    <ResponsiveContainer width="100%" height={350}>
                                         <LineChart data={formatChartData(telemetryData.series.main_power_voltage)}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="time" angle={-45} textAnchor="end" height={80} />
-                                            <YAxis label={{ value: 'Вольты', angle: -90, position: 'insideLeft' }} />
-                                            <Tooltip />
-                                            <Legend />
-                                            <Line type="monotone" dataKey="value" stroke="#f59e0b" name="Напряжение" dot={false} />
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                            <XAxis
+                                                dataKey="time"
+                                                angle={-45}
+                                                textAnchor="end"
+                                                height={100}
+                                                fontSize={11}
+                                                stroke="#6b7280"
+                                            />
+                                            <YAxis
+                                                label={{ value: 'Вольты', angle: -90, position: 'insideLeft' }}
+                                                stroke="#6b7280"
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="value"
+                                                stroke="#f59e0b"
+                                                name="Напряжение"
+                                                dot={false}
+                                                strokeWidth={2}
+                                            />
                                         </LineChart>
                                     </ResponsiveContainer>
                                 ) : (
-                                    <p className="text-gray-500 text-center py-8">Нет данных</p>
+                                    <p className="text-gray-500 text-center py-8">Нет данных о напряжении</p>
                                 )}
                             </div>
                         </div>
 
+                        {/* Карта */}
                         <div className="bg-white rounded-lg shadow-lg p-6">
-                            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                                Трек на карте ({telemetryData.track.length} точек)
+                            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                🗺️ Трек на карте ({telemetryData.track.length.toLocaleString()} точек)
                             </h2>
                             {telemetryData.track.length > 0 ? (
-                                <div className="h-96 rounded-lg overflow-hidden border border-gray-300">
+                                <div className="h-96 rounded-lg overflow-hidden border-2 border-gray-300">
                                     <MapContainer
                                         center={getMapCenter()}
                                         zoom={13}
@@ -292,7 +501,7 @@ const TelemetryDashboard = () => {
                                         <MapBounds bounds={getMapBounds()} />
                                         <Polyline
                                             positions={telemetryData.track.map(p => [p.lat, p.lon])}
-                                            color="blue"
+                                            color="#3b82f6"
                                             weight={3}
                                             opacity={0.7}
                                         />
@@ -300,8 +509,10 @@ const TelemetryDashboard = () => {
                                             <>
                                                 <Marker position={[telemetryData.track[0].lat, telemetryData.track[0].lon]}>
                                                     <Popup>
-                                                        <strong>Начало маршрута</strong><br/>
-                                                        {new Date(telemetryData.track[0].time).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
+                                                        <div className="font-medium">
+                                                            <strong className="text-green-600">🟢 Начало маршрута</strong><br/>
+                                                            {formatTimestampForDisplay(telemetryData.track[0].time)}
+                                                        </div>
                                                     </Popup>
                                                 </Marker>
                                                 <Marker position={[
@@ -309,8 +520,10 @@ const TelemetryDashboard = () => {
                                                     telemetryData.track[telemetryData.track.length - 1].lon
                                                 ]}>
                                                     <Popup>
-                                                        <strong>Конец маршрута</strong><br/>
-                                                        {new Date(telemetryData.track[telemetryData.track.length - 1].time).toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' })}
+                                                        <div className="font-medium">
+                                                            <strong className="text-red-600">🔴 Конец маршрута</strong><br/>
+                                                            {formatTimestampForDisplay(telemetryData.track[telemetryData.track.length - 1].time)}
+                                                        </div>
                                                     </Popup>
                                                 </Marker>
                                             </>
@@ -327,8 +540,11 @@ const TelemetryDashboard = () => {
                 {!telemetryData && !loading && !error && (
                     <div className="bg-white rounded-lg shadow-lg p-12 text-center">
                         <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-600 text-lg">
+                        <p className="text-gray-600 text-lg mb-2">
                             Выберите IMEI и период, затем нажмите "Загрузить данные"
+                        </p>
+                        <p className="text-gray-500 text-sm">
+                            Система автоматически применит оптимальную агрегацию данных
                         </p>
                     </div>
                 )}
